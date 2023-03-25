@@ -1,0 +1,235 @@
+// Modified from calcrxc.hoc and stim.hoc of Ted Carnevale
+// $Id: stim.hoc,v 1.5 2009/02/24 00:55:27 ted Exp ted $
+//
+// Calculates the transfer resistances between extracellular stimulating|recording
+// electrode(s) and a model neuron.  Relies on the principle of reciprocity, which
+// assumes that the intervening bath and tissue can be treated as linear.  Suppose a
+// stimulus current of amplitude Is, applied to a particular configuration of
+// extracellular electrode(s), produces a potential Vext(x,y,z) at location (x,y,z).
+// Then the transfer resistance between the electrode(s) and (x,y,z) is 
+//   rx(x,y,z) = Vext(x,y,z)/Is
+//
+// Insert the extracellular and xtra mechanisms in all sections that are subject to 
+// the extracellular field. Compute the transfer resistance rx for every section that
+// contains xtra, as illustrated below. Construct a stimulus waveform template and 
+// copy it to a Vector. For each internal node along the axon, use this Vector to 
+// drive is_xtra(x). The xtra mechanism uses the rx values to convert the stimulus
+// current waveform into the proper amplitude and sign of the local extracellular 
+// field.
+// 
+// If rho, b, or c is changed, new_elec() must be invoked to make the changes take
+// effect.
+//
+// To a first approximation, a monopolar stimulating electrode that delivers current 
+// I produces a field in which potential V is given by 
+//   V = I rho / 4 PI r
+// where r is the distance from the center of the electrode.
+// 
+// The principle of superposition may be applied to deal with an arbitrary number of
+// monopolar electrodes, or even surface electrodes with different shapes and areas,
+// which are located at arbitrary positions, and deliver arbitrary stimulus currents.
+//
+// The stimulus is constructed from a waveform template that is copied to a Vector. 
+// For each section that has the xtra mechanism, this Vector is used to drive
+// is_xtra. The transfer resistance rx_xtra takes care of the amplitude and sign of 
+// the local extracellular field. This works with fixed dt and adaptive integration.
+
+
+// resistivity of medium (ohm cm)
+rho = 110  // 60 in Greenberg99; 35.4 for sea water
+
+elecRad  = 10      //electrode radius (um)
+Rstdelec = 0.725   //transfer resistivity factor of a 10 um radius disk in Ames
+
+// monopolar electrode position (um)
+stimX = 20 // 20 
+stimY = 80 // 80 
+stimZ = -40 // -40 
+
+// rectangular pulse 
+stimDel = 010        // ms
+stimDur = 0.1        // ms
+stimAmp = -0.0011    // -0.0011 mA
+interPhaseDelay = 0  // ms
+interPulseDelay = 10 // ms
+repeats         = 1 
+
+objref stim_amp, stim_time
+stim_amp = new Vector()
+stim_time = new Vector()
+
+
+/////////////////////////////////////////////////////////////////////
+
+func arcsin() {
+    // non-iterative approximation of arcsine function
+    a0 = 1.5707288
+    a1 = -0.2121144
+    a2 = 0.0742610
+    a3 = -0.0187293    
+    return PI/2 - sqrt(1 - $1)*(a0 + a1*$1 + a2*$1^2 + a3*$1^3)
+}
+
+proc setrx() {
+    // xyc coords as arguments
+    forall {
+        if (ismembrane("xtra")) {
+            // avoid nodes at 0 and 1 ends: not override values at internal nodes
+            for (x,0) {
+                // point source electrode
+                // r = sqrt( \
+                    // (x_xtra(x) - xe)^2 + (y_xtra(x) - ye)^2 + (z_xtra(x) - ze)^2 )
+                // rx_xtra(x) = (rho / 4 / PI) * (1/r) * 0.01
+
+                //disk electrode
+                r   = sqrt( (x_xtra(x)-xe)^2 + (y_xtra(x)-ye)^2 )
+                geo = 2*elecRad / \
+                    ( sqrt( (r-elecRad)^2 + (z_xtra(x)-ze)^2 ) + \
+                      sqrt( (r+elecRad)^2 + (z_xtra(x)-ze)^2 ) )
+                // zScaling = 1 + 1.00 * exp( -0.004 * (z_xtra(x))^2 )  //
+                // Relec = Rstdelec*(100/elecRad^2) * zScaling  //
+                Relec = Rstdelec*(100/elecRad^2)
+                rx_xtra(x) = 2 * Relec * (1/PI) * arcsin(geo)
+            }
+        }
+    }
+}
+
+create sElec  // bogus section to show extracell stim/rec electrode location
+objref pElec  // bogus PointProcess just to show stim location
+objref gElec  // will be a Shape that shows extracellular electrode location
+gElec = new Shape(0)
+if (GLOBAL_HAS_GUI) {
+    gElec.view(FIELD_LEFT, FIELD_BOTTOM, FIELD_WIDTH, FIELD_HEIGHT, \
+               200, 450, 200, 200)
+}
+
+proc drawelec() {
+    sElec {
+        pt3dclear()
+        pt3dadd($1-0.5, $2, $3, 1)
+        pt3dadd($1+0.5, $2, $3, 1)
+        pElec = new IClamp(0.5)
+    }
+    gElec.point_mark(pElec, 2)  // red
+}
+
+proc setelec() {
+    xe = $1
+    ye = $2
+    ze = $3
+    setrx(xe, ye, ze)
+    drawelec(xe, ye, ze)
+}
+
+proc stim_waveform() {
+    // Input parameters:
+    //     $1    stimDel  
+    //     $2    stimDur
+    //     $3    stimAmp
+    //     $4    interphaseDelay
+    //     $5    interPulseDelay
+    //     $6    repetitions
+    
+    // Biphasic pulse: This uses interpolated play, stim vector and time vector 
+    //                    6--------7
+    //                    |        |
+    // 0------1        4--5        8--9
+    //        |        |
+    //        2--------3
+    //                repetitions
+    //        |<--------------------->|
+    // stim vector
+    stim_amp.resize(2+8*$6)
+    stim_amp.fill(0)
+    for (i = 2; i < 2+8*$6; i = i+8) {
+        stim_amp.x[i] = 1
+        stim_amp.x[i+1] = 1
+        stim_amp.x[i+4] = -1
+        stim_amp.x[i+5] = -1
+    }
+    stim_amp.mul($3)
+    // time vector
+    stim_time.resize(2+8*$6)
+    stim_time.x[1] = $1
+    progTime = $1
+    for (i = 2; i < 2+8*$6; i = i+8) {
+        stim_time.x[i]   = progTime
+        stim_time.x[i+1] = progTime + $2
+        stim_time.x[i+2] = progTime + $2
+        stim_time.x[i+3] = progTime + $2 + $4
+        stim_time.x[i+4] = progTime + $2 + $4
+        stim_time.x[i+5] = progTime + $2 + $4 + $2
+        stim_time.x[i+6] = progTime + $2 + $4 + $2
+        stim_time.x[i+7] = progTime + $2 + $4 + $2 + $5
+        progTime = stim_time.x[i+7]
+    }
+
+    // monophasic pulse
+    // stim_amp.resize(6)
+    // stim_amp.fill(0)
+    // stim_amp.x[2]=1
+    // stim_amp.x[3]=1
+    // stim_amp.mul($3)
+    // stim_time.resize(6)
+    // stim_time.x[1]=$1
+    // stim_time.x[2]=$1
+    // stim_time.x[3]=$1+$2
+    // stim_time.x[4]=$1+$2
+    // stim_time.x[5]=$1+$2+$4
+}
+
+ATTACHED__ = 0
+proc attach_stim() {
+    // since is_xtra is GLOBAL, we only need to specify Vector.play()
+    // for one instance of xtra, i.e. at just one internal node
+    // of only one section that contains xtra
+    forall {
+        if (ATTACHED__ == 0) {
+            if (ismembrane("xtra")) {
+                stim_amp.play(&is_xtra, stim_time, 1) // "interpolated" play
+                ATTACHED__ = 1
+            }
+        }
+    }
+}
+
+proc setstim() {
+    del = $1
+    dur = $2
+    amp = $3
+    interPhaseDelay = $4
+    interPulseDelay = $5
+    repeats = $6
+    stim_waveform(del, dur, amp, interPhaseDelay, interPulseDelay, repeats)
+    attach_stim()
+}
+
+
+/////////////////////////////////////////////////////////////////////
+
+setelec(stimX, stimY, stimZ)  // put stim electrode at (x, y, z)
+
+if (GLOBAL_HAS_GUI) {
+    xpanel("Extracellular Electrode Location", 0)
+        xlabel("xyz coords in um")
+        xvalue("radius", "elecRad", 1, "", 0, 1) 
+        xvalue("x", "stimX", 1, "setelec(stimX,stimY,stimZ)", 0, 1)
+        xvalue("y", "stimY", 1, "setelec(stimX,stimY,stimZ)", 0, 1)
+        xvalue("z", "stimZ", 1, "setelec(stimX,stimY,stimZ)", 0, 1)
+    xpanel(0,450)
+}
+
+setstim(stimDel, stimDur, stimAmp, interPhaseDelay, interPulseDelay, repeats)
+
+if (GLOBAL_HAS_GUI) {
+    xpanel("Extracellular Stimulus Current", 0)
+        xvalue("del (ms)", "stimDel", 1, "setstim(stimDel,stimDur,stimAmp,interPhaseDelay,interPulseDelay,repeats)", 0, 1)
+        xvalue("dur (ms)", "stimDur", 1, "setstim(stimDel,stimDur,stimAmp,interPhaseDelay,interPulseDelay,repeats)", 0, 1)
+        xvalue("amp (mA)", "stimAmp", 1, "setstim(stimDel,stimDur,stimAmp,interPhaseDelay,interPulseDelay,repeats)", 0, 1)
+        xvalue("interPhase (ms)", "interPhaseDelay", 1, "setstim(stimDel,stimDur,stimAmp,interPhaseDelay,interPulseDelay,repeats)", 0, 1)
+        xvalue("interPulse (ms)", "interPulseDelay", 1, "setstim(stimDel,stimDur,stimAmp,interPhaseDelay,interPulseDelay,repeats)", 0, 1)
+        xvalue("repeat", "repeats", 1, "setstim(stimDel,stimDur,stimAmp,interPhaseDelay,interPulseDelay,repeats)", 0, 1)
+    xpanel(0,605)
+}
+

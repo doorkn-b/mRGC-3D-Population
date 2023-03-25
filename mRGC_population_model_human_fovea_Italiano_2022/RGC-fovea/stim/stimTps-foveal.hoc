@@ -1,0 +1,132 @@
+// The stimulation code is based on stim.hoc. 
+{load_file("../../RGC/common/global.hoc")}
+
+// start parameter config (START point for Python parsing)
+// stimTps-foveal.hoc
+
+// resistivity of medium (ohm cm)
+rho = 110  // 60 in Greenberg99; 35.4 for sea water
+
+elecRad  = 5       //electrode radius (um) // was 5, 100 for argus
+Rstdelec = 0.725   //transfer resistivity factor of a 10 um radius disk in Ames
+
+// rectangular pulse 
+stimDel = 010        // ms
+
+// end parameter config (STOP point for Python parsing)
+
+// monopolar electrode position (um)
+stimX = 0
+stimY = 0
+stimZ = -80
+
+objref stim_amp, stim_time
+stim_amp = new Vector()
+stim_time = new Vector()
+
+
+/////////////////////////////////////////////////////////////////////
+
+func arcsin() {
+    // non-iterative approximation of arcsine function
+    // 4.4.45 from page 81 of the Handbook of Mathematical Functions, by Milton Abramowitz and Irene Stegun:
+    a0 = 1.5707288
+    a1 = -0.2121144
+    a2 = 0.0742610
+    a3 = -0.0187293    
+    return PI/2 - sqrt(1 - $1)*(a0 + a1*$1 + a2*$1^2 + a3*$1^3)
+}
+
+proc setrx() {
+    // xyc coords as arguments
+    forall {
+        if (ismembrane("xtra")) {
+            // avoid nodes at 0 and 1 ends: not override values at internal nodes
+            for (x,0) {
+                //disk electrode
+                r   = sqrt( (x_xtra(x)-xe)^2 + (y_xtra(x)-ye)^2 )
+                geo = 2*elecRad / \
+                    ( sqrt( (r-elecRad)^2 + (z_xtra(x)-ze)^2 ) + \
+                      sqrt( (r+elecRad)^2 + (z_xtra(x)-ze)^2 ) )
+                Relec = Rstdelec*(100/elecRad^2)
+                rx_xtra(x) = 2 * Relec * (1/PI) * arcsin(geo)
+            }
+        }
+    }
+}
+
+create sElec  // bogus section to show extracell stim/rec electrode location
+objref pElec  // bogus PointProcess just to show stim location
+objref gElec  // will be a Shape that shows extracellular electrode location
+gElec = new Shape(0)
+if (GLOBAL_HAS_GUI) {
+    gElec.view(FIELD_LEFT, FIELD_BOTTOM, FIELD_WIDTH, FIELD_HEIGHT, \
+               200, 450, 200, 200)
+}
+
+proc drawelec() {
+    sElec {
+        pt3dclear()
+        pt3dadd($1-0.5, $2, $3, 1)
+        pt3dadd($1+0.5, $2, $3, 1)
+        pElec = new IClamp(0.5)
+    }
+    gElec.point_mark(pElec, 2)  // red
+}
+
+proc setelec() {
+    xe = $1
+    ye = $2
+    ze = $3
+    setrx(xe, ye, ze)
+    drawelec(xe, ye, ze)
+}
+
+proc stim_waveform() {
+    // to be re-defined later with generated code
+}
+
+ATTACHED__ = 0
+proc attach_stim() {
+    // since is_xtra is GLOBAL, we only need to specify Vector.play()
+    // for one instance of xtra, i.e. at just one internal node
+    // of only one section that contains xtra
+    forall {
+        if (ATTACHED__ == 0) {
+            if (ismembrane("xtra")) {
+                stim_amp.play(&is_xtra, stim_time, 1) // "interpolated" play
+                ATTACHED__ = 1
+            }
+        }
+    }
+}
+
+proc setstim() {
+    del = $1
+    stim_waveform(del)
+    attach_stim()  
+}
+
+
+/////////////////////////////////////////////////////////////////////
+
+setelec(stimX, stimY, stimZ)  // put stim electrode at (x, y, z)
+
+if (GLOBAL_HAS_GUI) {
+    xpanel("Extracellular Electrode Location", 0)
+        xlabel("xyz coords in um")
+        xvalue("radius", "elecRad", 1, "", 0, 1) 
+        xvalue("x", "stimX", 1, "setelec(stimX,stimY,stimZ)", 0, 1)
+        xvalue("y", "stimY", 1, "setelec(stimX,stimY,stimZ)", 0, 1)
+        xvalue("z", "stimZ", 1, "setelec(stimX,stimY,stimZ)", 0, 1)
+    xpanel(0,450)
+}
+
+setstim(stimDel)
+
+if (GLOBAL_HAS_GUI) {
+    xpanel("Extracellular Stimulus Current", 0)
+        xvalue("del (ms)", "stimDel", 1, "setstim(stimDel)", 0, 1)
+    xpanel(0,605)
+}
+

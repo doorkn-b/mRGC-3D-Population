@@ -1,0 +1,48 @@
+
+// Check for zero diameter segment in 3D specifications
+proc uCheckZero3DDiam() { local i
+    forall for i = 0, n3d()-1 {
+        if (diam3d(i) == 0) { print secname(), " " , i }
+    }
+}
+
+// Display properties of each segment: name, nseg and length per segment
+proc uSegProperties() { local count
+    count = 0
+    print "Name     nseg     L/nseg"
+    print "------------------------"
+    forall {
+        print secname(), "  ", nseg, "  ", L/nseg
+        count += nseg
+    }
+    print "------------------------\n", "total nseg = ", count
+}
+
+// Record data for the specified variable
+objref uDv
+proc uRecord() {
+    uDv = new Vector()
+    uDv.record(&$&1)
+}
+
+// Checks for spike in recorded data during stim delay ~ 45 ms range
+func uHasSpike() { local i, hyp
+    //index of 1st threshold crossing
+    for i = (del+dur*2+0.5)/dt,(del+35)/dt {
+        if (uDv.x[i] >= 0) {
+            return i
+        }
+    }
+    //excessive stim causes transient hyp after stimulus
+    hyp = 1
+    for i = (del+dur*2+1.0)/dt,(del+dur*2+4.0)/dt {
+        if (uDv.x[i] >= uDv.x[0]) {
+            hyp = 0
+            break
+        }
+    }
+    if (hyp) { return -1 }
+    
+    return 0
+}
+

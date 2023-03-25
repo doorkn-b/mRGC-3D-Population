@@ -1,0 +1,29 @@
+
+// intracellular stimulus
+objref stim
+proc iIntraStim() {
+    stim = new IClamp(0.5)
+    stim.del = 20
+    stim.dur = 5.0
+    stim.amp = 0.75
+    printf("INFO: Using intracellular stimulation\n")
+}
+
+// extracellular stimulation
+GLOBAL_XTRA_STIM = 0
+proc iExtraStim() {
+    forall {
+        insert extracellular
+        insert xtra
+    }
+    {load_file("interpxyz.hoc")}
+    {load_file("stimTps-foveal.hoc")}
+    GLOBAL_XTRA_STIM = 1  // note extracellular stim
+    // printf("INFO: Using extracellular stimulation\n")
+}
+
+
+/////////////////////////////////////////////////////////////////////
+
+iExtraStim()
+

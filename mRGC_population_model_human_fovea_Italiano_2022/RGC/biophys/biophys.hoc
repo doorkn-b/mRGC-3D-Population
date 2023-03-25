@@ -1,0 +1,39 @@
+
+{load_file("../util.hoc")}
+
+// Initialization of biophysics testing facilities
+proc bInit() {
+    uRecord(&cell.soma.v(0.5))
+    tstop = 600
+    tstop_changed()
+
+    // no extracellular stim
+    stimAmp = 0
+    setstim(stimDel, stimDur, stimAmp)
+    iIntraStim()
+
+    // set up intracellular stimulation
+    stim = new IClamp(0.5)
+    stim.del = 50
+    stim.dur = 500
+    printf("INFO: initialized Iclamp delay = 50ms dur = 500ms\n")
+}
+
+// Iclamp with the given current amplitude ($1) and save data to ./output with 
+// the given file name prefix ($s2)
+objref bFObj
+strdef bFName
+proc bRun() {
+    // run simulation
+    stim.amp = $1
+    printf("INFO: Iclamp amp = %.3f\n", $1)
+    run()
+    
+    // save results
+    bFObj = new File()
+    sprint(bFName, "./output/Ic_%s_%.3fnA.txt", $s2, $1)
+    bFObj.wopen(bFName)
+    uDv.printf(bFObj, "%f\n")
+    bFObj.close()
+}
+

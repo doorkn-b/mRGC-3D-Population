@@ -1,0 +1,38 @@
+# https://github.com/matplotlib/matplotlib/blob/v3.4.2/matplotlibrc.template 
+
+xtick.labelsize : 60
+xtick.direction : inout
+xtick.major.size : 24
+xtick.major.width : 6
+
+ytick.labelsize : 60
+ytick.direction : inout
+ytick.major.size : 24
+ytick.major.width : 6
+ytick.minor.size : 24
+ytick.minor.width : 6
+
+legend.fontsize : 62
+lines.linewidth : 10
+lines.color : k
+
+axes.grid : False
+axes.grid.which : both
+axes3d.grid :  False  # display grid on 3D axes
+axes.facecolor: white
+axes.edgecolor : black   
+
+axes.linewidth: 6     # edge line width
+axes.spines.left : True  # display axis spines
+axes.spines.bottom : True
+axes.spines.top : False
+axes.spines.right : False
+
+axes.titlepad : 30
+axes.labelpad : 20
+
+image.cmap : inferno 
+figure.titlesize : 66
+figure.figsize : 30, 25  
+figure.dpi: 300  # 300 dpi minimum for most journals  
+font.size : 64 

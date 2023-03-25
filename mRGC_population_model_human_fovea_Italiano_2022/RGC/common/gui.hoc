@@ -1,0 +1,45 @@
+
+// display morphology of cell or network
+objref morph
+morph = new Shape(0)
+
+proc showCell() { local i, c
+    //color cells in a network
+    // c = 2
+    // for i = 0,offCells-1 {
+        // morph.color_list(off[i].all, c)
+        // c += 1
+        // if (c > 9) {
+            // c = 2
+        // }
+    // }
+    // for i = 0,onCells-1 {
+        // morph.color_list(on[i].all, c)
+        // c += 1
+        // if (c > 9) {
+            // c = 2
+        // }
+    // }
+    // for i = 0,6-1 {
+        // morph.color_list(sba[i].all, c)
+        // c += 1
+        // if (c > 9) {
+            // c = 2
+        // }
+    // }
+    morph.view($1, $2, $3, $4, 350, 30, 300, 300)
+}
+printf("INFO: Display cell with showCell()\n")
+
+// graphing
+objref guiGraph
+guiGraph = new Graph(0)
+addplot(guiGraph, 0)  // GUI to update this graph
+guiGraph.view(0, -70, 100, 90, 255, 100, 450, 300)  //xmin ymin xlen ylen ...
+
+
+/////////////////////////////////////////////////////////////////////
+
+{load_file("runCtrl.ses")}
+GLOBAL_HAS_GUI = 1  // note GUI up and running
+

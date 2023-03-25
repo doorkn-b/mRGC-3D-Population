@@ -1,0 +1,7 @@
+
+GLOBAL_HAS_GUI = 0         // flag for displaying GUI
+
+{load_file("stdgui.hoc")}  // core machinery needed for run() in nrnin
+celsius = 35
+v_init = -68.3
+
