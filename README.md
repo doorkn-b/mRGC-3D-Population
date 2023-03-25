@@ -1,4 +1,4 @@
-# RGC-fovea
+# Repo for NNM conversion of RGC-fovea (Italiano et al, 2022) from NEURON for practice.
 
 **Source code corresponding to Italiano et al 2022 J. Neural Eng. https://doi.org/10.1088/1741-2552/ac72c2.**
 
